@@ -6,12 +6,15 @@ Các lỗ hỏng web phổ thông từ các giải CTF.
   - [Danh sách các mục](#danh-sách-các-mục)
     - [PHP](#php)
       - [POP chain](#Pop-chain)
-      - [Co gion khong](#co-gion-khong)
+        - [Co gion khong](#co-gion-khong)
+      - [LFI](#lfi)
+        - [[HCTF 2018]WarmUp](#hctf-2018warmup)
     - [SQL injection](#SQL-Injection)
       - [SQL Maxter](#sql-maxter)
-      - [Inj3ction Time](#inj3ction-time)
-    - [Flask](#flask)
-      - [EHC Hair Salon](#ehc-hair-salon)
+      - [Inj3ction Time - Union attack](#inj3ction-time)
+    - [SSTI](#ssti)
+      - [Flask](#flask)
+        - [EHC Hair Salon](#ehc-hair-salon)
     - [Prototype Pollution](#prototype-pollution)
       - [Fruit Store](#fruit-store)
     - [WAF](#WAF)
@@ -187,7 +190,84 @@ Ta sẽ được payload:
 - Tổng quan: là 1 trong những lỗi phổ biến của sql, chèn 1 đoạn truy vấn từ máy khách đến ứng dụng, mục đích nhằm khai thác dữ liệu hoặc sửa đổi cơ sở dữ liệu, chi tiết tại [đây](https://owasp.org/www-community/attacks/SQL_Injection)
 - Nhận diện: có sử dụng SQL, tham khảo thêm tại [đây](https://viblo.asia/p/huong-dan-test-sql-injection-vi-du-va-cach-phong-ngua-cac-cuoc-tan-cong-sql-injection-3P0lPYap5ox)
 
+## LFI
+
+- LFI hay Local FIle Inclusion, cho phép kẻ tấn công có thể xem các tệp trên máy chủ từ xa mà không cần nhìn thấy hoặc có thể thực thi các mã vào 1 mục tiêu bất kì trên trang web php.
+- Nhận diện: trong source có `include`, `require`, `include_once`, `require_once`.
+- Kỹ thuật kết hợp thêm: [`file path travelsal`](https://portswigger.net/web-security/file-path-traversal).
+
+### [HCTF 2018]WarmUp
+
+Source code tại trang `source.php`:
+```php
+    <?php
+    highlight_file(__FILE__);
+    class emmm
+    {
+        public static function checkFile(&$page)
+        {
+            $whitelist = ["source"=>"source.php","hint"=>"hint.php"];
+            if (! isset($page) || !is_string($page)) {
+                echo "you can't see it";
+                return false;
+            }
+
+            if (in_array($page, $whitelist)) {
+                return true;
+            }
+
+            $_page = mb_substr(
+                $page,
+                0,
+                mb_strpos($page . '?', '?')
+            );
+            if (in_array($_page, $whitelist)) {
+                return true;
+            }
+
+            $_page = urldecode($page);
+            $_page = mb_substr(
+                $_page,
+                0,
+                mb_strpos($_page . '?', '?')
+            );
+            if (in_array($_page, $whitelist)) {
+                return true;
+            }
+            echo "you can't see it";
+            return false;
+        }
+    }
+
+    if (! empty($_REQUEST['file'])
+        && is_string($_REQUEST['file'])
+        && emmm::checkFile($_REQUEST['file'])
+    ) {
+        include $_REQUEST['file'];
+        exit;
+    } else {
+        echo "<br><img src=\"https://i.loli.net/2018/11/01/5bdb0d93dc794.jpg\" />";
+    }  
+?>
+```
+- Phân tích: trong source có sử dụng `include $_REQUEST['file']`, nên khá chắc là lỗi LFI, ta sẽ tương tác ở URL: `?file=`.
+  - Ngoài ra ` $whitelist = ["source"=>"source.php","hint"=>"hint.php"];` ta thấy phần sau của code có kiểm tra ký tự trong whitelist, nếu có thì sẽ cho chạy.
+  - Nội dung của `hint.php` là: `flag not here, and flag in ffffllllaaaagggg`, vậy là thông tin cần tìm trong `ffffllllaaaagggg`.
+  - Sau khi chạy xong hàm `checkFile`, phần đuôi sau sẽ bị xóa.
+  - Ngoài ra còn có điều kiện để chạy được hàm `include`:
+```
+     if (! empty($_REQUEST['file'])
+        && is_string($_REQUEST['file'])
+        && emmm::checkFile($_REQUEST['file'])
+``` 
+  - Hướng giải quyết: ta đã biết được flag nằm chỗ nào, ngoài ra, ta nhận thấy, các ký tự sau `?file=` sẽ bị encode, viết payload như sau: `?file=hint.php?file=../../../../../ffffllllaaaagggg` sau khi chạy xong đoạn script và chỉ kiểm tra `?file=hint.php` xong xóa phần đó, thế là chúng ta đã lấy được flag: `flag{b84a3078-c867-4a0b-ad02-d7b51486c0de}`
+
 ---
+
+## SQL Injection
+
+- Injection có nghĩa là tiêm vào, hay có nghĩa là kéo dài để làm thay đổi cách hoạt động, trong trường hợp này là của SQL.
+- Nhận diện: sẽ sử dụng truy vấn database như `?id=123` trong URL hoặc tương tự.
 
 ### SQL Maxter
 
@@ -271,6 +351,10 @@ ta tìm thấy cột tên `f0und_m3`
 Vậy payload hoàn chỉnh `1 UNION SELECT  f0und_m3, NULL, NULL, NULL FROM w0w_y0u_f0und_m3`
 ![](https://i.imgur.com/trcuRpd.png)
 Flag: `abctf{uni0n_1s_4_gr34t_c0mm4nd}`
+
+## SSTI
+
+- SSTI hay server side template injection, lỗi khi sử dụng template khi lập trình, lợi dụng việc render của template.
 
 ## Flask
 
